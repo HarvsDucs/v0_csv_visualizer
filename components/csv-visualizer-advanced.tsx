@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, ChangeEvent, useMemo } from 'react'
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -8,9 +9,9 @@ import { Slider } from "@/components/ui/slider"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
-import { HeatMap } from '@nivo/heatmap'
+import { ResponsiveHeatMap } from '@nivo/heatmap'
 
-interface Statistics {
+type StatisticsType = {
   count: number;
   mean: string;
   std: string;
@@ -22,26 +23,19 @@ interface Statistics {
   mode: string;
 }
 
-interface ModeAccumulator {
-  count: { [key: number]: number };
-  mode: number;
-  modeCount: number;
-}
-
-interface ColumnStatistics {
+type ColumnStatistics = {
   column: string;
-  stats: Statistics | null;
+  stats: StatisticsType | null;
 }
 
-interface DistributionData {
-  bin?: string;
-  category?: string;
-  count: number;
-}
-
-interface ColumnDistribution {
+type DistributionDataType = {
   column: string;
-  data: DistributionData[];
+  data: Array<{ bin?: string; category?: string; count: number }>;
+}
+
+type CorrelationDataType = {
+  id: string;
+  data: Array<{ x: string; y: number }>;
 }
 
 export function CsvVisualizerAdvanced() {
@@ -81,7 +75,7 @@ export function CsvVisualizerAdvanced() {
 
   const isNumeric = (value: string) => !isNaN(parseFloat(value)) && isFinite(Number(value))
 
-  const calculateStatistics = (columnData: string[]): Statistics | null => {
+  const calculateStatistics = (columnData: string[]): StatisticsType | null => {
     const numericData = columnData.filter(isNumeric).map(Number)
     if (numericData.length === 0) return null
 
@@ -97,8 +91,8 @@ export function CsvVisualizerAdvanced() {
     const q1 = numericData[Math.floor(length * 0.25)]
     const q3 = numericData[Math.floor(length * 0.75)]
 
-    const modeResult = numericData.reduce(
-      (acc: ModeAccumulator, val: number) => {
+    const modeResult = numericData.reduce<{ count: Record<number, number>; mode: number; modeCount: number }>(
+      (acc, val) => {
         acc.count[val] = (acc.count[val] || 0) + 1
         if (acc.count[val] > acc.modeCount) {
           acc.modeCount = acc.count[val]
@@ -122,7 +116,7 @@ export function CsvVisualizerAdvanced() {
     }
   }
 
-  const statistics = useMemo(() => {
+  const statistics: ColumnStatistics[] = useMemo(() => {
     if (csvData.length === 0) return []
 
     return columnNames.map((column, index) => {
@@ -131,10 +125,10 @@ export function CsvVisualizerAdvanced() {
         column,
         stats: calculateStatistics(columnData)
       }
-    }).filter((col): col is { column: string; stats: Statistics } => col.stats !== null)
+    })
   }, [csvData, columnNames])
 
-  const distributionData = useMemo(() => {
+  const distributionData: DistributionDataType[] = useMemo(() => {
     if (csvData.length === 0) return []
 
     return columnNames.map((column, index) => {
@@ -163,10 +157,10 @@ export function CsvVisualizerAdvanced() {
           }))
         }
       } else {
-        const categoryCounts: { [key: string]: number } = {}
-        columnData.forEach(value => {
-          categoryCounts[value] = (categoryCounts[value] || 0) + 1
-        })
+        const categoryCounts: Record<string, number> = columnData.reduce((acc: Record<string, number>, value) => {
+          acc[value] = (acc[value] || 0) + 1
+          return acc
+        }, {})
 
         return {
           column,
@@ -179,7 +173,7 @@ export function CsvVisualizerAdvanced() {
     })
   }, [csvData, columnNames])
 
-  const correlationData = useMemo(() => {
+  const correlationData: CorrelationDataType[] = useMemo(() => {
     if (csvData.length === 0) return []
 
     const numericColumns = columnNames.filter((_, index) => 
@@ -288,7 +282,7 @@ export function CsvVisualizerAdvanced() {
                         <TableRow key={stat}>
                           <TableCell className="font-medium">{stat}</TableCell>
                           {statistics.map(({ column, stats }) => (
-                            <TableCell key={column}>{stats[stat as keyof Statistics]}</TableCell>
+                            <TableCell key={column}>{stats ? stats[stat as keyof StatisticsType] : 'N/A'}</TableCell>
                           ))}
                         </TableRow>
                       ))}
@@ -315,62 +309,60 @@ export function CsvVisualizerAdvanced() {
               </TabsContent>
               <TabsContent value="correlation">
                 <div style={{ height: '500px' }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <HeatMap
-                      data={correlationData}
-                      margin={{ top: 60, right: 90, bottom: 60, left: 90 }}
-                      valueFormat=">-.2f"
-                      axisTop={{
-                        tickSize: 5,
-                        tickPadding: 5,
-                        tickRotation: -90,
-                        legend: '',
-                        legendOffset: 46
-                      }}
-                      axisRight={{
-                        tickSize: 5,
-                        tickPadding: 5,
-                        tickRotation: 0,
-                        legend: '',
-                        legendPosition: 'middle',
-                        legendOffset: 70
-                      }}
-                      axisLeft={{
-                        tickSize: 5,
-                        tickPadding: 5,
-                        tickRotation: 0,
-                        legend: '',
-                        legendPosition: 'middle',
-                        legendOffset: -72
-                      }}
-                      colors={{
-                        type: 'diverging',
-                        scheme: 'red_yellow_blue',
-                        divergeAt: 0.5,
-                        minValue: -1,
-                        maxValue: 1
-                      }}
-                      emptyColor="#555555"
-                      legends={[
-                        {
-                          anchor: 'bottom',
-                          translateX: 0,
-                          translateY: 30,
-                          length: 400,
-                          thickness: 8,
-                          direction: 'row',
-                          tickPosition: 'after',
-                          tickSize: 3,
-                          tickSpacing: 4,
-                          tickOverlap: false,
-                          tickFormat: '>-.2f',
-                          title: 'Correlation →',
-                          titleAlign: 'start',
-                          titleOffset: 4
-                        }
-                      ]}
-                    />
-                  </ResponsiveContainer>
+                  <ResponsiveHeatMap
+                    data={correlationData}
+                    margin={{ top: 60, right: 90, bottom: 60, left: 90 }}
+                    valueFormat=">-.2f"
+                    axisTop={{
+                      tickSize: 5,
+                      tickPadding: 5,
+                      tickRotation: -90,
+                      legend: '',
+                      legendOffset: 46
+                    }}
+                    axisRight={{
+                      tickSize: 5,
+                      tickPadding: 5,
+                      tickRotation: 0,
+                      legend: '',
+                      legendPosition: 'middle',
+                      legendOffset: 70
+                    }}
+                    axisLeft={{
+                      tickSize: 5,
+                      tickPadding: 5,
+                      tickRotation: 0,
+                      legend: '',
+                      legendPosition: 'middle',
+                      legendOffset: -72
+                    }}
+                    colors={{
+                      type: 'diverging',
+                      scheme: 'red_yellow_blue',
+                      divergeAt: 0.5,
+                      minValue: -1,
+                      maxValue: 1
+                    }}
+                    emptyColor="#555555"
+                    legends={[
+                      {
+                        anchor: 'bottom',
+                        translateX: 0,
+                        translateY: 30,
+                        length: 400,
+                        thickness: 8,
+                        direction: 'row',
+                        tickPosition: 'after',
+                        tickSize: 3,
+                        tickSpacing: 4,
+                        tickOverlap: false,
+                        tickFormat: '>-.2f',
+                        title: 'Correlation →',
+                        titleAlign: 'start',
+                        titleOffset: 4
+                      }
+                    ]}
+                  />
                 </div>
               </TabsContent>
             </Tabs>
