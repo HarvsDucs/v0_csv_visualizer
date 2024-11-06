@@ -10,6 +10,40 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { HeatMap } from '@nivo/heatmap'
 
+interface Statistics {
+  count: number;
+  mean: string;
+  std: string;
+  min: string;
+  q1: string;
+  median: string;
+  q3: string;
+  max: string;
+  mode: string;
+}
+
+interface ModeAccumulator {
+  count: { [key: number]: number };
+  mode: number;
+  modeCount: number;
+}
+
+interface ColumnStatistics {
+  column: string;
+  stats: Statistics | null;
+}
+
+interface DistributionData {
+  bin?: string;
+  category?: string;
+  count: number;
+}
+
+interface ColumnDistribution {
+  column: string;
+  data: DistributionData[];
+}
+
 export function CsvVisualizerAdvanced() {
   const [csvData, setCsvData] = useState<string[][]>([])
   const [columnNames, setColumnNames] = useState<string[]>([])
@@ -47,7 +81,7 @@ export function CsvVisualizerAdvanced() {
 
   const isNumeric = (value: string) => !isNaN(parseFloat(value)) && isFinite(Number(value))
 
-  const calculateStatistics = (columnData: string[]) => {
+  const calculateStatistics = (columnData: string[]): Statistics | null => {
     const numericData = columnData.filter(isNumeric).map(Number)
     if (numericData.length === 0) return null
 
@@ -63,8 +97,8 @@ export function CsvVisualizerAdvanced() {
     const q1 = numericData[Math.floor(length * 0.25)]
     const q3 = numericData[Math.floor(length * 0.75)]
 
-    const mode = numericData.reduce(
-      (acc, val) => {
+    const modeResult = numericData.reduce(
+      (acc: ModeAccumulator, val: number) => {
         acc.count[val] = (acc.count[val] || 0) + 1
         if (acc.count[val] > acc.modeCount) {
           acc.modeCount = acc.count[val]
@@ -73,7 +107,7 @@ export function CsvVisualizerAdvanced() {
         return acc
       },
       { count: {}, mode: numericData[0], modeCount: 1 }
-    ).mode
+    )
 
     return {
       count: length,
@@ -84,7 +118,7 @@ export function CsvVisualizerAdvanced() {
       median: median.toFixed(2),
       q3: q3.toFixed(2),
       max: numericData[length - 1].toFixed(2),
-      mode: mode.toFixed(2)
+      mode: modeResult.mode.toFixed(2)
     }
   }
 
@@ -97,7 +131,7 @@ export function CsvVisualizerAdvanced() {
         column,
         stats: calculateStatistics(columnData)
       }
-    }).filter(col => col.stats !== null)
+    }).filter((col): col is { column: string; stats: Statistics } => col.stats !== null)
   }, [csvData, columnNames])
 
   const distributionData = useMemo(() => {
@@ -129,10 +163,10 @@ export function CsvVisualizerAdvanced() {
           }))
         }
       } else {
-        const categoryCounts = columnData.reduce((acc, value) => {
-          acc[value] = (acc[value] || 0) + 1
-          return acc
-        }, {})
+        const categoryCounts: { [key: string]: number } = {}
+        columnData.forEach(value => {
+          categoryCounts[value] = (categoryCounts[value] || 0) + 1
+        })
 
         return {
           column,
@@ -254,7 +288,7 @@ export function CsvVisualizerAdvanced() {
                         <TableRow key={stat}>
                           <TableCell className="font-medium">{stat}</TableCell>
                           {statistics.map(({ column, stats }) => (
-                            <TableCell key={column}>{stats[stat]}</TableCell>
+                            <TableCell key={column}>{stats[stat as keyof Statistics]}</TableCell>
                           ))}
                         </TableRow>
                       ))}
